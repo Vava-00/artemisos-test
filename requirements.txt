@@ -1,2 +1,13 @@
-fastapi
-uvicorn
+# Server
+Flask>=3.0,<4.0
+gunicorn>=23.0,<26.0
+
+# NASA/IPAC IRSA HTTP client and retry support
+requests>=2.31,<3.0
+urllib3>=2.5,<3.0
+
+# FITS, coordinates, numerical processing, and PNG previews
+numpy>=1.26,<3.0
+astropy>=6.0,<8.0
+matplotlib>=3.8,<4.0
+Pillow>=10.0,<13.0
