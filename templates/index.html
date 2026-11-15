@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SPHEREx · Sky Viewer</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body>
+
+<!-- Header and mission branding -->
+<header class="top">
+  <!-- Team logo stored in static/assets/. -->
+  <img class="logo" src="{{ url_for('static', filename='assets/team-logo.svg') }}" alt="Team logo">
+  <h1>SPHEREx</h1>
+  <!-- Placeholder NASA mark; replace with approved mission branding if needed. -->
+  <img class="logo nasa" src="{{ url_for('static', filename='assets/nasa-logo.svg') }}" alt="NASA wordmark placeholder">
+</header>
+
+<main class="layout">
+
+  <!-- Search and analysis controls -->
+  <aside class="side">
+
+    <!-- Search -->
+    <section>
+      <h2>Search the sky</h2>
+      <div class="search-toggles" aria-label="Search options">
+        <div class="toggle">
+          <label class="switch">
+            <input type="checkbox" id="modeSwitch" aria-label="Switch between coordinates and object name">
+            <span></span>
+          </label>
+          <b id="modeText">Search by name</b>
+        </div>
+        <div class="toggle">
+          <label class="switch">
+            <input type="checkbox" id="querySwitch" {% if not advanced_enabled %}disabled title="Full FITS requires a server with more memory."{% endif %} aria-label="Switch between quick FITS cutouts and advanced full FITS">
+            <span></span>
+          </label>
+          <b id="queryText">Advanced search (full FITS)</b>
+        </div>
+      </div>
+      <p id="queryHint"><span id="queryCurrent">Quick search:</span> <span id="queryDescription">FITS cutouts centered on your coordinates.</span>{% if not advanced_enabled %} <span class="availability-note">Full FITS mode is disabled on this server.</span>{% endif %}</p>
+      <form id="searchForm" class="search">
+        <div class="fields" id="coordFields">
+          <label>RA (°)<input class="fld" id="ra" inputmode="decimal" autocomplete="off" placeholder="0–360"></label>
+          <label>DEC (°)<input class="fld" id="dec" inputmode="decimal" autocomplete="off" placeholder="−90–90"></label>
+        </div>
+        <div class="fields" id="nameFields" hidden>
+          <label>Object name<input class="fld" id="objName" list="nameSuggestions" autocomplete="off"></label>
+          <datalist id="nameSuggestions"></datalist>
+        </div>
+        <button class="icon-btn gold" type="submit" aria-label="Search">
+          <svg viewBox="0 0 24 24"><circle cx="10" cy="10" r="6"/><path d="M15 15l6 6"/></svg>
+        </button>
+      </form>
+      <p class="err" id="err" role="alert"></p>
+      <p id="status" role="status" aria-live="polite">Enter coordinates or an object name to search SPHEREx.</p>
+      <p id="archiveNotice" class="archive-notice" role="status" aria-live="polite" hidden></p>
+    </section>
+
+    <!-- Playback settings -->
+    <section>
+      <h2>Playback</h2>
+      <div class="play">
+        <label>Time interval (sec)
+          <input class="fld" type="number" id="intervalSeconds" min="1" step="1" value="3">
+        </label>
+        <label title="Days to advance at each playback step; all archived dates stay available">Period (days)
+          <input class="fld" type="number" id="periodDays" min="1" step="1" value="1">
+        </label>
+      </div>
+      <p id="periodHint">Period sets the day jump during playback; all available dates stay on the timeline.</p>
+    </section>
+
+    <!-- IR bands -->
+    <section>
+      <h2>IR bands</h2>
+      <div class="bands" id="bands">
+        <button class="band" data-band="1" title="0.75–1.11 µm">Band 1</button>
+        <button class="band" data-band="2" title="1.11–1.64 µm">Band 2</button>
+        <button class="band" data-band="3" title="1.64–2.42 µm">Band 3</button>
+        <button class="band" data-band="4" title="2.42–3.82 µm">Band 4</button>
+        <button class="band" data-band="5" title="3.82–4.42 µm">Band 5</button>
+        <button class="band" data-band="6" title="4.42–5.00 µm">Band 6</button>
+      </div>
+    </section>
+
+    <!-- Comparison -->
+    <section>
+      <h2>Comparison</h2>
+      <button class="compare" id="compareBtn" aria-pressed="false">Compare</button>
+      <div class="cmp" id="cmpPanel" hidden>
+        <div class="add">
+          <select class="fld" id="addSel" aria-label="Date to add"></select>
+          <button class="small" id="addBtn" type="button">Add</button>
+        </div>
+        <div class="chips" id="chips"></div>
+      </div>
+    </section>
+
+    <!-- Spectral analysis is optional and must not slow down the main viewer. -->
+    <section id="spectrumSection" aria-labelledby="spectrumTitle">
+      <div class="sec-head spectrum-head">
+        <h2 id="spectrumTitle">Spectrum</h2>
+        <button class="small" id="specCsv" type="button" title="Download spectrum measurements (CSV)" disabled>CSV</button>
+      </div>
+      <button class="small spec-action" id="specGenerate" type="button" disabled>Generate spectrum</button>
+      <div class="spec" id="specBox">
+        <svg id="spectrum" viewBox="0 0 400 230" role="img" aria-label="Spectrum"></svg>
+        <div class="spec-tip" id="specTip" role="status" hidden></div>
+      </div>
+      <p class="spec-note" id="specNote" aria-live="polite">Search first, then generate an optional spectrum.</p>
+      <p class="spec-note" id="specCaution">Exploratory pixel brightness, not a calibrated source spectrum. Different dates may overlap.</p>
+    </section>
+  </aside>
+
+  <!-- Sky image, playback controls, and timeline -->
+  <section class="viewer">
+    <div class="stage">
+
+      <!-- Progress overlay while selected-band previews load. -->
+      <div id="loadingOverlay" role="status" aria-live="polite" aria-busy="false" hidden>
+        <span class="loading-spinner" aria-hidden="true"></span>
+        <strong id="loadingMessage">Preparing observations…</strong>
+      </div>
+
+      <!-- Image frame (1:1) -->
+      <div class="frame" id="frame">
+        <img id="skyImage" alt="Sky image" hidden draggable="false">
+        <div class="empty" id="emptyMsg">Enter coordinates or an object name, then press Search.</div>
+        <div class="zoom">
+          <button class="icon-btn" id="zin" aria-label="Zoom in"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+          <button class="icon-btn" id="zout" aria-label="Zoom out"><svg viewBox="0 0 24 24"><path d="M5 12h14"/></svg></button>
+        </div>
+      </div>
+
+      <!-- Date, details and action buttons -->
+      <div class="meta">
+        <div class="info">
+          <span class="date" id="date">—</span>
+          <span class="coord" id="details"></span>
+          <a id="fitsDownload" hidden target="_blank" rel="noopener noreferrer">Download original FITS</a>
+        </div>
+        <div class="actions">
+          <button class="icon-btn lg" id="play" aria-label="Play" title="Play / Pause"><svg viewBox="0 0 24 24" id="playIcon"><path d="M8 5v14l11-7z"/></svg></button>
+          <button class="icon-btn lg" id="prev" aria-label="Previous image" title="Previous" hidden><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+          <button class="icon-btn lg" id="next" aria-label="Next image" title="Next" hidden><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>
+          <button class="icon-btn lg gold" id="capture" aria-pressed="false" aria-label="Capture point" title="Capture point">
+            <svg viewBox="0 0 24 24"><path d="M4 8h3.5l1.8-2.5h5.4L16.5 8H20v11H4z"/><circle cx="12" cy="13.2" r="3.4"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Timeline -->
+      <div class="timeline">
+        <input type="range" id="slider" min="0" max="0" value="0" disabled aria-label="Timeline">
+        <div class="ticks" id="ticks"></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- Attribution -->
+<footer>
+  <span>Demo developed by team “Artemisos” for the “2026 NASA Space Apps Challenge”, in the “Planet X and SPHEREx” challenge</span>
+  <span>Image source: NASA / Caltech / IPAC</span>
+</footer>
+
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+<script src="{{ url_for('static', filename='js/spectrum.js') }}"></script>
+</body>
+</html>
