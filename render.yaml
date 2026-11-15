@@ -1,0 +1,23 @@
+# Render Blueprint: GitHub -> free Python web service.
+# The full-FITS mode is intentionally disabled on the 512 MB Free instance.
+services:
+  - type: web
+    name: artemisos-spherex
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn --workers 1 --threads 2 --timeout 180 --bind 0.0.0.0:$PORT main:app
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.11
+      - key: SPHEREX_ALLOW_ADVANCED
+        value: "false"
+      - key: SPHEREX_CACHE_DIR
+        value: /tmp/artemisos-spherex
+      - key: SPHEREX_PREVIEW_CACHE_MB
+        value: "128"
+      - key: SPHEREX_PREVIEW_CACHE_FILES
+        value: "1000"
+      - key: MPLCONFIGDIR
+        value: /tmp/artemisos-matplotlib
