@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SPHEREx · Sky Viewer</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- ============ HEADER ============ -->
+<header class="top">
+  <!-- Placeholder logo: replace assets/team-logo.svg (or change the src) -->
+  <img class="logo" src="assets/team-logo.svg" alt="Team logo">
+  <h1>SPHEREx</h1>
+  <!-- Placeholder logo: replace assets/nasa-logo.svg with the official NASA logo -->
+  <img class="logo nasa" src="assets/nasa-logo.svg" alt="NASA">
+</header>
+
+<main class="layout">
+
+  <!-- ============ LEFT PANEL: CONTROLS ============ -->
+  <aside class="side">
+
+    <!-- Search -->
+    <section>
+      <h2>Search the sky</h2>
+      <form id="searchForm" class="search">
+        <div class="fields" id="coordFields">
+          <label>Right ascension (RA)<input class="fld" id="ra" inputmode="decimal" autocomplete="off"></label>
+          <label>Declination (DEC)<input class="fld" id="dec" inputmode="decimal" autocomplete="off"></label>
+        </div>
+        <div class="fields" id="nameFields" hidden>
+          <label>Object name<input class="fld" id="objName" list="nameSuggestions" autocomplete="off"></label>
+          <datalist id="nameSuggestions"></datalist>
+        </div>
+        <button class="icon-btn gold" type="submit" aria-label="Search">
+          <svg viewBox="0 0 24 24"><circle cx="10" cy="10" r="6"/><path d="M15 15l6 6"/></svg>
+        </button>
+      </form>
+      <div class="toggle">
+        <label class="switch">
+          <input type="checkbox" id="modeSwitch" aria-label="Switch search type">
+          <span></span>
+        </label>
+        <b id="modeText">Search by name</b>
+      </div>
+      <p class="err" id="err" role="alert"></p>
+    </section>
+
+    <!-- Playback settings -->
+    <section>
+      <h2>Playback</h2>
+      <div class="play">
+        <label>Time interval (sec)
+          <input class="fld" type="number" id="intervalSeconds" min="1" step="1" value="3">
+        </label>
+        <label>Period (years)
+          <input class="fld" type="number" id="periodYears" min="0.5" step="0.5" value="1">
+        </label>
+      </div>
+    </section>
+
+    <!-- IR bands -->
+    <section>
+      <h2>IR bands</h2>
+      <div class="bands" id="bands">
+        <button class="band" data-band="1" title="0.75–1.11 µm">Band 1</button>
+        <button class="band" data-band="2" title="1.11–1.64 µm">Band 2</button>
+        <button class="band" data-band="3" title="1.64–2.42 µm">Band 3</button>
+        <button class="band" data-band="4" title="2.42–3.82 µm">Band 4</button>
+        <button class="band" data-band="5" title="3.82–4.42 µm">Band 5</button>
+        <button class="band" data-band="6" title="4.42–5.00 µm">Band 6</button>
+      </div>
+    </section>
+
+    <!-- Comparison -->
+    <section>
+      <h2>Comparison</h2>
+      <button class="compare" id="compareBtn" aria-pressed="false">Compare</button>
+      <div class="cmp" id="cmpPanel" hidden>
+        <div class="add">
+          <select class="fld" id="addSel" aria-label="Date to add"></select>
+          <button class="small" id="addBtn" type="button">Add</button>
+        </div>
+        <div class="chips" id="chips"></div>
+      </div>
+    </section>
+  </aside>
+
+  <!-- ============ RIGHT PANEL: VIEWER ============ -->
+  <section class="viewer">
+    <div class="stage">
+
+      <!-- Image frame (1:1) -->
+      <div class="frame" id="frame">
+        <img id="skyImage" alt="Sky image" hidden draggable="false">
+        <div class="empty" id="emptyMsg">No image loaded</div>
+        <div class="zoom">
+          <button class="icon-btn" id="zin" aria-label="Zoom in"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+          <button class="icon-btn" id="zout" aria-label="Zoom out"><svg viewBox="0 0 24 24"><path d="M5 12h14"/></svg></button>
+        </div>
+      </div>
+
+      <!-- Date, details and action buttons -->
+      <div class="meta">
+        <div class="info">
+          <span class="date" id="date">—</span>
+          <span class="coord" id="details"></span>
+        </div>
+        <div class="actions">
+          <button class="icon-btn lg" id="play" aria-label="Play" title="Play / Pause"><svg viewBox="0 0 24 24" id="playIcon"><path d="M8 5v14l11-7z"/></svg></button>
+          <button class="icon-btn lg" id="prev" aria-label="Previous image" title="Previous" hidden><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+          <button class="icon-btn lg" id="next" aria-label="Next image" title="Next" hidden><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>
+          <button class="icon-btn lg gold" id="capture" aria-pressed="false" aria-label="Capture point" title="Capture point">
+            <svg viewBox="0 0 24 24"><path d="M4 8h3.5l1.8-2.5h5.4L16.5 8H20v11H4z"/><circle cx="12" cy="13.2" r="3.4"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Timeline -->
+      <div class="timeline">
+        <input type="range" id="slider" min="0" max="0" value="0" aria-label="Timeline">
+        <div class="ticks" id="ticks"></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- ============ FOOTER ============ -->
+<footer>
+  <span>Demo developed by team “Artemisos” for the “2026 NASA Space Apps Challenge”, in the “Planet X and SPHEREx” challenge</span>
+  <span>Image source: NASA / Caltech / IPAC</span>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>
