@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Visor Temporal SPHEREx - 6 Bandas</title>
+  <style>
+    body { font-family: system-ui, sans-serif; background: #0f172a; color: #f8fafc; margin: 20px; }
+    .controls { display: flex; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; align-items: center; }
+    input, button { padding: 8px 12px; border-radius: 6px; border: 1px solid #334155; }
+    input { background: #1e293b; color: white; width: 120px; }
+    button { background: #3b82f6; color: white; cursor: pointer; font-weight: bold; }
+    button:hover { background: #2563eb; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 18px; }
+    .card { background: #1e293b; border-radius: 8px; padding: 14px; border: 1px solid #334155; }
+    .card h3 { margin: 0 0 10px 0; color: #38bdf8; font-size: 1.05rem; }
+    
+    /* Estilos del carrusel */
+    .carousel-nav { display: flex; justify-content: space-between; align-items: center; background: #0f172a; padding: 6px 10px; border-radius: 6px; margin-bottom: 10px; }
+    .carousel-nav button { padding: 4px 10px; font-size: 0.85rem; background: #334155; }
+    .carousel-nav button:hover { background: #475569; }
+    .carousel-counter { font-size: 0.85rem; font-weight: bold; color: #e2e8f0; }
+
+    .img-box { position: relative; min-height: 290px; background: #020617; border-radius: 4px; display: flex; align-items: center; justify-content: center; }
+    .img-box img { width: 100%; height: auto; border-radius: 4px; display: block; cursor: zoom-in; }
+    .loader { position: absolute; color: #94a3b8; font-size: 0.85rem; }
+    .meta { font-size: 0.85rem; color: #94a3b8; margin-top: 10px; line-height: 1.6; }
+    .fecha-badge { display: inline-block; background: #0369a1; color: #e0f2fe; padding: 2px 8px; border-radius: 4px; font-weight: bold; margin-bottom: 4px; }
+  </style>
+</head>
+<body>
+
+  <h2>Explorador Temporal de Bandas Infrarrojas SPHEREx</h2>
+  
+  <div class="controls">
+    <label>Buscar por nombre: 
+      <input type="text" id="nombreObjeto" placeholder="Ej. Andromeda, M42, M51" style="width: 210px;"
+             onkeydown="if(event.key==='Enter') buscarPorNombre()">
+    </label>
+    <button onclick="buscarPorNombre()" style="background: #10b981;">Buscar Objeto</button>
+  </div>
+
+  <div class="controls">
+    <label>RA (°): <input type="number" id="ra" value="10.6847" step="0.0001"></label>
+    <label>Dec (°): <input type="number" id="dec" value="41.2687" step="0.0001"></label>
+    <label>Radio (°): <input type="number" id="radio" value="0.02" step="0.01" max="0.5"></label>
+    <button onclick="buscar()">Consultar SPHEREx</button>
+  </div>
+
+  <p id="estado"></p>
+  <div class="grid" id="galeria"></div>
+
+  <script>
+    // Almacena todas las exposiciones agrupadas por banda y el índice actual de cada carrusel
+    let datosBandas = {};
+    let indicesCarrusel = {};
+
+    async function buscarPorNombre() {
+      const nombre = document.getElementById("nombreObjeto").value.trim();
+      const estado = document.getElementById("estado");
+      if (!nombre) return;
+
+      estado.textContent = `Buscando coordenadas de "${nombre}" en SIMBAD/NED...`;
+      try {
+        const res = await fetch(`/api/resolver?nombre=${encodeURIComponent(nombre)}`);
+        const data = await res.json();
+        if (data.status !== "ok") {
+          estado.textContent = data.mensaje;
+          return;
+        }
+        document.getElementById("ra").value = data.ra;
+        document.getElementById("dec").value = data.dec;
+        buscar();
+      } catch (err) {
+        estado.textContent = "Error al resolver el nombre: " + err;
+      }
+    }
+
+    async function buscar() {
+      const ra = document.getElementById("ra").value;
+      const dec = document.getElementById("dec").value;
+      const radio = document.getElementById("radio").value;
+      const estado = document.getElementById("estado");
+      const galeria = document.getElementById("galeria");
+
+      estado.textContent = "Consultando exposiciones y fechas en IRSA...";
+      galeria.innerHTML = "";
+
+      try {
+        const res = await fetch(`/api/buscar?ra=${ra}&dec=${dec}&radio=${radio}`);
+        const data = await res.json();
+
+        if (data.status !== "ok") {
+          estado.textContent = "Error: " + data.mensaje;
+          return;
+        }
+
+        datosBandas = data.bandas_carrusel;
+        indicesCarrusel = {};
+        const claves = Object.keys(datosBandas);
+
+        estado.textContent = `Se encontraron ${data.total_encontrados} exposiciones en distintas fechas, agrupadas en ${claves.length} bandas.`;
+
+        claves.forEach((banda, idx) => {
+          indicesCarrusel[banda] = 0;
+          const cardId = `banda-card-${idx}`;
+
+          const card = document.createElement("div");
+          card.className = "card";
+          card.id = cardId;
+          card.innerHTML = `
+            <h3>${banda}</h3>
+            <div class="carousel-nav">
+              <button onclick="cambiarSlide('${banda}', '${cardId}', -1)">&#9664; Anterior</button>
+              <span class="carousel-counter" id="${cardId}-counter"></span>
+              <button onclick="cambiarSlide('${banda}', '${cardId}', 1)">Siguiente &#9654;</button>
+            </div>
+            <div class="img-box">
+              <span class="loader" id="${cardId}-loader">Renderizando FITS...</span>
+              <img id="${cardId}-img" alt="${banda}">
+            </div>
+            <div class="meta" id="${cardId}-meta"></div>
+          `;
+          galeria.appendChild(card);
+
+          // Renderizar la primera fecha (índice 0)
+          actualizarTarjeta(banda, cardId);
+        });
+
+      } catch (err) {
+        estado.textContent = "Error de conexión: " + err;
+      }
+    }
+
+    function cambiarSlide(banda, cardId, delta) {
+      const lista = datosBandas[banda];
+      if (!lista || lista.length <= 1) return;
+
+      const total = lista.length;
+      indicesCarrusel[banda] = (indicesCarrusel[banda] + delta + total) % total;
+      actualizarTarjeta(banda, cardId);
+    }
+
+    function actualizarTarjeta(banda, cardId) {
+      const lista = datosBandas[banda];
+      const idx = indicesCarrusel[banda];
+      const item = lista[idx];
+
+      const previewUrl = `/api/preview?url=${encodeURIComponent(item.access_url)}`;
+      const imgEl = document.getElementById(`${cardId}-img`);
+      const loaderEl = document.getElementById(`${cardId}-loader`);
+      const counterEl = document.getElementById(`${cardId}-counter`);
+      const metaEl = document.getElementById(`${cardId}-meta`);
+
+      counterEl.textContent = `Toma ${idx + 1} de ${lista.length}`;
+      loaderEl.style.display = "block";
+      loaderEl.textContent = "Renderizando FITS con Matplotlib...";
+      imgEl.style.opacity = "0.3";
+
+      imgEl.onload = () => {
+        loaderEl.style.display = "none";
+        imgEl.style.opacity = "1";
+      };
+      imgEl.onerror = () => {
+        loaderEl.textContent = "Error al renderizar esta toma";
+      };
+      imgEl.onclick = () => window.open(previewUrl, "_blank");
+      imgEl.src = previewUrl;
+
+      metaEl.innerHTML = `
+        <div class="fecha-badge">📅 ${item.fecha}</div><br>
+        <strong>OBS ID:</strong> ${item.obs_id}<br>
+        <strong>Centro:</strong> ${Number(item.s_ra).toFixed(4)}°, ${Number(item.s_dec).toFixed(4)}°<br>
+        <a href="${item.access_url}" style="color:#60a5fa;" target="_blank">Descargar FITS original</a>
+      `;
+    }
+  </script>
+</body>
+</html>

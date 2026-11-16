@@ -1,0 +1,91 @@
+/* Zero-dependency checks for optional spectrum module. Run with Node.js. */
+const fs = require('node:fs');
+const path = require('node:path');
+const assert = require('node:assert/strict');
+const vm = require('node:vm');
+const code = fs.readFileSync(path.join(__dirname, '../spectrum.js'), 'utf8');
+const html = fs.readFileSync(path.join(__dirname, '../index.html'), 'utf8');
+const ids = [...html.matchAll(/\bid="([\w-]+)"/g)].map(m => m[1]);
+assert(html.indexOf('id="compareBtn"') < html.indexOf('id="spectrumTitle"'), 'Spectrum must come after Comparison');
+assert(html.includes('<script src="spectrum.js"></script>'), 'Load the independent module');
+class El {
+  constructor(id='') {
+    this.id=id; this.attributes={}; this.children=[]; this.hidden=false; this.disabled=false;
+    this._textContent=''; this.style={}; this.listeners={}; this.classList={toggle(){}};
+  }
+  get textContent() { return this._textContent; }
+  set textContent(text) { this._textContent=String(text); this.children=[]; }
+  append(...children) { this.children.push(...children); }
+  setAttribute(k,v) { this.attributes[k]=String(v); }
+  addEventListener(k,fn) { (this.listeners[k] ||= []).push(fn); }
+  getBoundingClientRect() { return {left:0,top:0,width:400,height:230}; }
+  click() { this.listeners.click?.forEach(f=>f()); }
+}
+const els = Object.fromEntries(ids.map(id => [id, new El(id)]));
+let network=[]; let downloaded;
+const events=[];
+const document = {
+  getElementById: id => { assert(els[id], `Missing id: ${id}`); return els[id]; },
+  createElementNS: (_ns,name) => new El(name),
+  createElement: name => new El(name),
+  dispatchEvent: e => events.push(e),
+};
+const U = class extends URL {};
+U.createObjectURL=()=> 'blob:test'; U.revokeObjectURL=()=>{};
+let csv = null;
+const context = {document, window:{}, URL:U,
+  Blob: class {constructor(chunks){csv=chunks.join('');}},
+  AbortController, Event: class {constructor(type){this.type=type;}},
+  CustomEvent: class {constructor(type,options){this.type=type;this.detail=options.detail;}},
+  fetch: async (url, options) => {
+    network.push({url, options});
+    const body=JSON.parse(options.body);
+    assert.equal(body.ra, 12); assert.equal(body.dec, -2);
+    assert.equal(body.radius, 0.02);
+    return {ok: true, json: async()=>
+      body.access_url.includes('missing') ? {status:'ok',lam:null,flux:5,err:null} :
+      {status:'ok', lam:2.6,flux:8,err:.4,width:.05}};
+  },
+  setTimeout, clearTimeout, console};
+vm.createContext(context);
+vm.runInContext(code,context);
+const spectrum=context.window.ArtemisosSpectrum;
+assert(spectrum && typeof spectrum.setCatalog === 'function');
+assert.equal(network.length, 0, 'Spectrum must not fetch on initial load');
+assert(els.specGenerate.disabled, 'Generate disabled before a search');
+const items=[{id:'1:0',band:1,mjd:60000,fecha:'2025-01-01',access_url:'https://irsa.ipac.caltech.edu/ibe/data/spherex/dr1/a.fits'},
+ {id:'2:0',band:2,mjd:60010,fecha:'2025-01-11',access_url:'https://irsa.ipac.caltech.edu/ibe/data/spherex/dr1/missing.fits'}];
+spectrum.setCatalog(items,{ra:12,dec:-2,radius:.02,queryType:'advanced'});
+assert.equal(network.length,0, 'Spectrum generation must be opt-in even in Advanced');
+assert.equal(els.specGenerate.disabled,false);
+els.loadingOverlay.hidden=true;
+(async()=>{
+  await els.specGenerate.onclick();
+  assert.equal(network.length,2, 'One small FITS measurement request per observation');
+  assert(network.every(x=>x.url==='/api/spectrum/point' && x.options.method==='POST'));
+  assert.equal(els.specCsv.disabled,false);
+  assert(els.specNote.textContent.includes('1 spectral points from 2'));
+  assert(els.specGenerate.textContent.includes('Retry'));
+  let hits=els.spectrum.children.filter(x=>x.attributes.class==='hit');
+  assert.equal(hits.length,1,'No point with invented wavelength');
+  spectrum.setCurrent('1:0'); spectrum.setSaved(['1:0']); spectrum.setBand(2);
+  assert(els.spectrum.children.some(x=>x.attributes.class==='halo'),'Current observation has halo');
+  assert(els.spectrum.children.some(x=>x.attributes.class==='pt saved'),'Captured point highlighted');
+  hits=els.spectrum.children.filter(x=>x.attributes.class==='hit'); hits[0].click();
+  assert.equal(events.at(-1).type,'spherex:spectrumselect');
+  assert.equal(events.at(-1).detail.id,'1:0');
+  els.specCsv.onclick(); assert(csv.includes('brightness_MJy_sr')); assert(csv.includes('2025-01-01'));
+  // New time-domain view: dates and detector-specific samples, no extra downloads.
+  els.specTimeBand.value='1';els.specTimeBand.onchange();
+  els.specView.value='time'; els.specView.onchange();
+  assert(els.spectrum.children.some(n => n._textContent==='Observation date (UTC)'));
+  assert(els.spectrum.children.some(n => n.attributes.class==='hit'));
+  els.specView.value='spectrum'; els.specView.onchange();
+  els.specScale.value='full';els.specScale.onchange();
+  els.specYear.value='2025';els.specYear.onchange();
+  assert.equal(network.length,2,'Display filters must not refetch FITS');
+  spectrum.reset();
+  assert.equal(network.length,2, 'Reset should not fetch');
+  assert.equal(els.specCsv.disabled,true);
+  console.log('PASS: spectrum opt-in, search isolation, point extraction, SVG, capture, select, CSV.');
+})().catch(error=>{console.error(error);process.exitCode=1;});
