@@ -1,0 +1,76 @@
+/* Artemisos · WISE comparison add-on. Reuses the palette from styles.css. */
+.wise-panel { min-width: 0; display: flex; flex-direction: column; gap: 16px; align-self: flex-start; }
+.wise-panel h2 { margin: 0; }
+.wise-controls { display: flex; flex-direction: column; gap: 12px; }
+.wise-panel-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.wise-bands { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 0; }
+.wise-bands .band { padding: 10px 0; }
+.wise-frame { position: relative; width: min(100%, max(420px, calc(100vh - 365px))); margin: 0 auto;
+  aspect-ratio: 1 / 1; overflow: hidden; border-radius: 12px; border: 1px solid var(--line);
+  background: #070b16; box-shadow: 0 8px 30px rgba(0,0,0,.35); }
+.wise-frame img { width: 100%; height: 100%; object-fit: contain; display: block; image-rendering: pixelated; }
+.wise-loading { position: absolute; inset: 0; z-index: 2; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 12px; text-align: center; padding: 16px;
+  background: rgba(11, 20, 40, .9); color: #f8fafc; }
+.wise-loading[hidden] { display: none !important; }
+.wise-loading .loading-spinner { display: block; height: 36px; width: 36px;
+  border: 4px solid rgba(255,255,255,.17); border-top-color: #f4c54a; border-radius: 50%;
+  animation: spherex-spin .85s linear infinite; }
+.wise-panel .info { margin-top: 4px; }
+.wise-panel .info a { color: var(--gold); font-size: .78rem; }
+.wise-panel .date { font-size: 1.1rem; }
+@media (prefers-reduced-motion: reduce) { .wise-loading .loading-spinner { animation: none; } }
+
+/* Side by side on wide screens; stacked on narrower ones. */
+@media (min-width: 1200px) {
+  .viewer.with-wise { gap: 32px; align-items: flex-start; }
+  .viewer.with-wise .stage, .viewer.with-wise .wise-panel { flex: 1 1 0; }
+  .viewer.with-wise .frame, .viewer.with-wise .wise-frame { width: 100%; }
+}
+@media (max-width: 1199px) {
+  .viewer.with-wise { flex-direction: column; gap: 32px; }
+  .viewer.with-wise .wise-panel { width: 100%; }
+}
+
+/* ---------- WISE overlay on top of the SPHEREx image ---------- */
+/* Specificity beats `.frame img`; the layer mirrors #skyImage's transform. */
+.frame .wise-overlay { position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: contain; image-rendering: auto; mix-blend-mode: screen;
+  pointer-events: none; transform-origin: center; }
+.wise-overlay-btn { font-weight: 600; white-space: nowrap; }
+.wise-overlay-btn[aria-pressed="true"] { background: var(--gold); color: #14182e; }
+.overlay-bar { margin: 0; padding: 10px 12px; border: 1px solid var(--line);
+  border-radius: 10px; background: var(--surface); }
+.overlay-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; }
+.overlay-title { font-weight: 600; color: var(--gold); font-size: .86rem; }
+.overlay-bands { display: grid; grid-template-columns: repeat(4, 56px); gap: 6px; }
+.overlay-bands .band { padding: 7px 0; font-size: .82rem; }
+.overlay-opacity { display: flex; align-items: center; gap: 8px; margin-left: auto;
+  font-size: .78rem; color: var(--mute); min-width: 160px; flex: 1 1 160px; max-width: 260px; }
+.overlay-opacity input[type=range] { margin: 0; }
+.overlay-bar .spec-note { margin-top: 8px; }
+
+/* Responsive WISE grid: same maximum vertical footprint as the main viewer. */
+.wise-frame { width: min(100%, max(185px, calc(100dvh - 330px)));
+  max-width: 100%; max-height: max(185px, calc(100dvh - 330px)); }
+.viewer.with-wise { max-width: 100%; min-width: 0; }
+.viewer.with-wise .stage { min-width: 0; }
+.viewer.with-wise .wise-panel { min-width: 0; }
+@media (min-width: 1200px) {
+  .viewer.with-wise { flex-direction: row; gap: clamp(12px, 1.8vw, 24px); }
+  .viewer.with-wise .stage, .viewer.with-wise .wise-panel { flex: 1 1 0; width: 0; }
+  .viewer.with-wise .frame, .viewer.with-wise .wise-frame { width: 100%; max-height: min(100%, calc(100dvh - 330px)); }
+}
+@media (max-width: 900px) {
+  .wise-frame { width: min(100%, max(170px, calc(100dvh - 235px)));
+    max-height: max(170px, calc(100dvh - 235px)); }
+}
+.frame .wise-overlay { z-index: 2; }
+
+.wise-panel .info { min-width: 0; overflow-wrap: anywhere; }
+.wise-panel .wise-overlay-btn[hidden] { display: none !important; }
+@media (max-width: 900px) {
+  .wise-panel-head { align-items: stretch; }
+  .wise-panel-head .wise-overlay-btn { width: 100%; }
+  .wise-bands { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

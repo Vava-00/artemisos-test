@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 60" role="img" aria-label="NASA text placeholder">
+  <rect width="120" height="60" rx="10" fill="#173a72"/>
+  <text x="60" y="39" text-anchor="middle" fill="#fff" font-family="Arial,sans-serif" font-size="30" font-weight="bold">NASA</text>
+  <path d="M8 49 108 11" stroke="#efbf04" stroke-width="1.4" opacity=".85"/>
+</svg>
